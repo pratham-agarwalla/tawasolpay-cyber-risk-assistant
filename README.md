@@ -12,10 +12,8 @@ license: mit
 
 # TawasolPay — AI-Powered Cyber Risk Assistant
 
-Take-home submission for the AI Engineer role.
-
-**Live demo:** _to be added once deployed to Hugging Face Spaces_
-**Source:** _this repository_
+**Live demo:** https://huggingface.co/spaces/ps2285/tawasolpay-cyber-risk-assistant
+**Source:** https://github.com/pratham-agarwalla/tawasolpay-cyber-risk-assistant
 
 ---
 
