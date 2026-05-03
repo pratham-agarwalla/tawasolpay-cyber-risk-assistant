@@ -4,8 +4,6 @@ import sys
 import time
 import logging
 from pathlib import Path
-
-# Make `src` importable when running via `streamlit run app.py`
 sys.path.insert(0, str(Path(__file__).parent))
 
 import streamlit as st

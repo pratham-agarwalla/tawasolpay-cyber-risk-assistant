@@ -1,15 +1,3 @@
-"""Cross-reference vulnerabilities against the live CISA KEV catalog.
-
-The CISA Known Exploited Vulnerabilities catalog is the canonical public source
-for "is this CVE actually being exploited in the wild?" and "is it associated
-with ransomware campaigns?". The file is a free CSV updated by the US
-government, and the assignment specifically calls for using it.
-
-We download it on first use, cache it on disk, and join it to our vulnerability
-list by CVE ID. If the download fails (offline, blocked egress, etc.), we fall
-back gracefully and surface the failure in the UI rather than silently
-producing wrong rankings.
-"""
 from __future__ import annotations
 from pathlib import Path
 import time
@@ -19,13 +7,11 @@ import requests
 
 log = logging.getLogger(__name__)
 
-# Primary URL (CISA hosts the official CSV directly)
 KEV_URL_PRIMARY = "https://www.cisa.gov/sites/default/files/csv/known_exploited_vulnerabilities.csv"
-# Mirror maintained by CISA on GitHub
 KEV_URL_MIRROR = "https://raw.githubusercontent.com/cisagov/kev-data/main/known_exploited_vulnerabilities.csv"
 
 CACHE_FILE = Path("cache/kev.csv")
-CACHE_TTL_SECONDS = 24 * 3600  # refresh once a day
+CACHE_TTL_SECONDS = 24 * 3600
 
 
 def _cache_fresh(path: Path) -> bool:
@@ -33,7 +19,6 @@ def _cache_fresh(path: Path) -> bool:
 
 
 def fetch_kev(force: bool = False, cache_file: Path = CACHE_FILE) -> tuple[pd.DataFrame | None, str]:
-    """Download the KEV catalog, caching to disk. Returns (df, status_message)."""
     cache_file.parent.mkdir(parents=True, exist_ok=True)
 
     if not force and _cache_fresh(cache_file):
@@ -55,7 +40,6 @@ def fetch_kev(force: bool = False, cache_file: Path = CACHE_FILE) -> tuple[pd.Da
             last_err = e
             log.warning("KEV fetch failed from %s: %s", url, e)
 
-    # Last resort: stale cache if any
     if cache_file.exists():
         try:
             df = pd.read_csv(cache_file)
@@ -66,7 +50,6 @@ def fetch_kev(force: bool = False, cache_file: Path = CACHE_FILE) -> tuple[pd.Da
 
 
 def enrich_with_kev(vulns: pd.DataFrame, kev: pd.DataFrame | None) -> pd.DataFrame:
-    """Add kev_listed, kev_ransomware, kev_date_added, kev_required_action columns."""
     out = vulns.copy()
     out["kev_listed"] = False
     out["kev_ransomware"] = False
@@ -76,12 +59,6 @@ def enrich_with_kev(vulns: pd.DataFrame, kev: pd.DataFrame | None) -> pd.DataFra
 
     if kev is None or kev.empty:
         return out
-
-    # CISA KEV column names (canonical):
-    #   cveID, vendorProject, product, vulnerabilityName, dateAdded,
-    #   shortDescription, requiredAction, dueDate,
-    #   knownRansomwareCampaignUse, notes, cwes
-    # We're defensive about variations.
     cve_col = "cveID" if "cveID" in kev.columns else next(
         (c for c in kev.columns if c.lower() == "cveid"), None
     )
@@ -107,7 +84,6 @@ def enrich_with_kev(vulns: pd.DataFrame, kev: pd.DataFrame | None) -> pd.DataFra
     for cve in out["cve"]:
         if isinstance(cve, str) and cve in kev_lookup.index:
             row = kev_lookup.loc[cve]
-            # Handle duplicate CVE rows defensively
             if isinstance(row, pd.DataFrame):
                 row = row.iloc[0]
             listed.append(True)

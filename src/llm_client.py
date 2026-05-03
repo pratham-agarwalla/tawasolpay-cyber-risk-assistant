@@ -1,18 +1,3 @@
-"""Thin Groq wrapper for the two narrow LLM tasks.
-
-The LLM is used ONLY for:
-  1. Generating a plain-English explanation of why a risk ranks where it does.
-     Inputs: the ranked-row evidence (asset, vuln, threat-intel, business
-     service, scoring factors). Output: 2-3 sentence explanation.
-  2. Summarizing the retrieved NIST 800-53 control in plain English.
-     Inputs: the actual NIST control text (retrieved via RAG). Output:
-     2-3 sentence summary grounded only in the provided text.
-
-Both calls use temperature=0.2 to reduce variance. Both use system prompts
-that explicitly forbid invention of facts not present in the input. If the
-LLM call fails (network/auth/rate-limit), the system degrades to a
-deterministic template-based explanation so the page still renders.
-"""
 from __future__ import annotations
 import os
 import logging
@@ -25,7 +10,6 @@ DEFAULT_MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 
 
 def _client():
-    """Lazy import + initialize Groq client. Returns None if key/lib missing."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         return None
@@ -53,9 +37,6 @@ def _chat(messages: list[dict], temperature: float = 0.2, max_tokens: int = 400)
         log.warning("Groq call failed: %s", e)
         return None
 
-
-# ---------- Task 1: ranking explanation ----------
-
 EXPLAIN_SYSTEM = """You are a senior cyber risk analyst preparing a board-level brief.
 You must produce a 2-3 sentence plain-English explanation of why a specific risk
 ranks where it does in the prioritized risk list.
@@ -78,8 +59,6 @@ STRICT RULES:
 
 
 def explain_ranking(rank: int, score: float, row: dict, factors: list[dict]) -> str:
-    """Generate a plain-English explanation. Falls back to a template if LLM unavailable."""
-    # Build a compact evidence dict
     evidence = {
         "rank": rank,
         "risk_score": round(float(score), 1),
@@ -127,7 +106,6 @@ def explain_ranking(rank: int, score: float, row: dict, factors: list[dict]) -> 
 
 
 def _template_explanation(rank: int, e: dict) -> str:
-    """Deterministic fallback when the LLM is unreachable."""
     bits = []
     bits.append(f"Ranks #{rank} because it combines technical severity (CVSS {e['cvss']}) with business impact.")
     if e["internet_exposed"]:
@@ -148,9 +126,6 @@ def _template_explanation(rank: int, e: dict) -> str:
         bits.append(f"The same CVE also affects: {names}.")
     return " ".join(bits)
 
-
-# ---------- Task 2: NIST control summary ----------
-
 NIST_SUMMARY_SYSTEM = """You translate a NIST SP 800-53 control into a 2-3 sentence
 plain-English summary that a technical manager could act on.
 
@@ -165,7 +140,6 @@ STRICT RULES:
 
 
 def summarize_nist_control(control: dict, risk_context: dict) -> str:
-    """Summarize the retrieved NIST control with the specific risk in mind."""
     if not control:
         return "No relevant NIST control was retrieved."
 
@@ -187,15 +161,11 @@ def summarize_nist_control(control: dict, risk_context: dict) -> str:
     if out:
         return out
 
-    # Deterministic fallback: take a meaningful first sentence (NIST controls start with
-    # "a. ..." enumerations, so naive split-on-period yields "a"; we strip those prefixes).
     text = (control.get("text") or "").strip()
     if not text:
         return f"NIST {control.get('control_id')} ({control.get('name')}) applies but text is unavailable."
     import re
-    # Strip leading enumerator like "a. " or "1. " that appears at the start of NIST control text
     cleaned = re.sub(r"^[a-z0-9]+\.\s+", "", text)
-    # Split into sentences by period followed by whitespace and a capital letter
     sentences = re.split(r"(?<=[.!?])\s+(?=[A-Z])", cleaned)
     snippet = " ".join(sentences[:2]).strip()
     if len(snippet) > 280:

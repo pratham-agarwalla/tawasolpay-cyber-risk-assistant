@@ -1,15 +1,3 @@
----
-title: TawasolPay AI Cyber Risk Assistant
-emoji: 🛡️
-colorFrom: indigo
-colorTo: red
-sdk: streamlit
-sdk_version: 1.39.0
-app_file: app.py
-pinned: false
-license: mit
----
-
 # TawasolPay — AI-Powered Cyber Risk Assistant
 
 **Live demo:** https://huggingface.co/spaces/ps2285/tawasolpay-cyber-risk-assistant
@@ -80,9 +68,7 @@ The app is designed to run unchanged on Hugging Face Spaces (Streamlit SDK):
 
 ## Supporting question 1 — The data split
 
-**What I embedded and why.** I embedded the NIST SP 800-53 Rev. 5 control catalog. Each control is one chunk (control ID + name + control text + discussion + related controls). I embedded with `sentence-transformers/all-MiniLM-L6-v2` and stored in ChromaDB. The reason: NIST controls are *prose*. There is no useful structure to filter on (you cannot say `WHERE control = 'thing about patching internet-exposed VPNs'`). Semantic similarity over the prose is exactly the right access pattern.
-
-**What I queried as structured records and why.** Everything else: the asset inventory, the vulnerability list, the threat intel feed, the business services table, and the CISA KEV catalog. They have well-defined schemas, deterministic join keys (`asset_id`, `cve`, `business_service`), and the operations I need are filters and joins, not similarity. Embedding them would lose precision (an asset with `internet_exposed=Yes` is a *fact*, not a vector neighbor) and cost recall (you cannot reliably rank by *score* with cosine similarity). Pandas joins with a transparent additive scoring function keep the ranking explainable, reproducible, and auditable — three properties a CISO will want when defending a board recommendation.
+Structured datasets (assets, vulnerabilities, threat intel, KEV) are processed using joins and deterministic scoring because they contain precise facts. NIST controls are unstructured text, so embeddings enable effective semantic retrieval. This split ensures both accuracy and flexibility while keeping results explainable.
 
 ## Supporting question 2 — Where it goes wrong
 

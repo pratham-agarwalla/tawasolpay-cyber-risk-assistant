@@ -1,16 +1,13 @@
-"""Load and join the TawasolPay data pack."""
 from __future__ import annotations
 from pathlib import Path
 import pandas as pd
 
 
 def _yn(s: pd.Series) -> pd.Series:
-    """Normalize Yes/No columns to bools."""
     return s.astype(str).str.strip().str.lower().eq("yes")
 
 
 def load_data_pack(data_dir: str | Path = "data") -> dict[str, pd.DataFrame]:
-    """Load all CSVs and the threat report. Returns a dict of dataframes + threat_report str."""
     data_dir = Path(data_dir)
 
     assets = pd.read_csv(data_dir / "assets.csv")
@@ -19,7 +16,6 @@ def load_data_pack(data_dir: str | Path = "data") -> dict[str, pd.DataFrame]:
     bs = pd.read_csv(data_dir / "business_services.csv")
     rg = pd.read_csv(data_dir / "remediation_guidance.csv")
 
-    # Normalize boolean-ish columns
     assets["internet_exposed_b"] = _yn(assets["internet_exposed"])
     assets["edr_installed_b"] = _yn(assets["edr_installed"])
     vulns["exploit_available_b"] = _yn(vulns["exploit_available"])
@@ -27,7 +23,6 @@ def load_data_pack(data_dir: str | Path = "data") -> dict[str, pd.DataFrame]:
     vulns["internet_exposed_vuln_b"] = vulns["asset_exposure"].astype(str).str.strip().str.lower().eq("internet")
     ti["ransomware_b"] = _yn(ti["ransomware_association"])
 
-    # Read threat report as a single string
     threat_report = (data_dir / "synthetic_threat_report.md").read_text(encoding="utf-8")
 
     return {
@@ -41,17 +36,11 @@ def load_data_pack(data_dir: str | Path = "data") -> dict[str, pd.DataFrame]:
 
 
 def build_enriched_view(d: dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Join vulns -> assets -> business_services and attach matched threat-intel.
-
-    Returns one row per (vuln, matching_ti). Vulns with no TI match get a single
-    row with NaN TI columns (left join).
-    """
     v = d["vulnerabilities"].copy()
     a = d["assets"].copy()
     b = d["business_services"].copy()
     ti = d["threat_intelligence"].copy()
 
-    # Join asset facts onto vuln
     v_a = v.merge(
         a[
             [
@@ -65,15 +54,12 @@ def build_enriched_view(d: dict[str, pd.DataFrame]) -> pd.DataFrame:
         how="left",
     )
 
-    # Join business service context
     v_a_b = v_a.merge(
         b.rename(columns={"business_impact": "bs_impact"}),
         on="business_service",
         how="left",
     )
 
-    # Aggregate matching TI per CVE: keep the MOST severe TI match
-    # severity proxy: ransomware first, then weaponized > active exploitation > others
     maturity_rank = {
         "Weaponized": 4,
         "Active Exploitation": 3,
@@ -85,13 +71,11 @@ def build_enriched_view(d: dict[str, pd.DataFrame]) -> pd.DataFrame:
     ti = ti.assign(_mat=ti["exploit_maturity"].map(maturity_rank).fillna(0))
     ti_sorted = ti.sort_values(["ransomware_b", "_mat"], ascending=[False, False])
 
-    # For each CVE, keep the top TI record
     ti_top = (
         ti_sorted.dropna(subset=["matched_cve_or_control"])
         .drop_duplicates(subset=["matched_cve_or_control"], keep="first")
     )
 
-    # Also compute aggregates per CVE (any ransomware match? count of campaigns?)
     ti_agg = (
         ti.groupby("matched_cve_or_control", as_index=False)
         .agg(

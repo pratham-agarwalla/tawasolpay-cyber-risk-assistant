@@ -1,4 +1,3 @@
-"""End-to-end pipeline: data -> KEV enrichment -> scoring -> top-5 -> RAG -> LLM -> rendered output."""
 from __future__ import annotations
 import logging
 import pandas as pd
@@ -13,10 +12,6 @@ log = logging.getLogger(__name__)
 
 
 def attach_remediation_hints(enriched: pd.DataFrame, remediation: pd.DataFrame) -> pd.DataFrame:
-    """Best-effort fuzzy match of remediation_guidance.csv to vulnerabilities by finding_type
-    against vulnerability_name. The hint is used only as a query-augmentation signal for RAG;
-    the authoritative guidance comes from NIST.
-    """
     out = enriched.copy()
     out["remediation_hint"] = ""
     if remediation is None or remediation.empty:
@@ -28,11 +23,9 @@ def attach_remediation_hints(enriched: pd.DataFrame, remediation: pd.DataFrame) 
         n = (name or "").lower()
         if not n:
             return ""
-        # 1) substring match
         hits = rem[rem["finding_type_lc"].apply(lambda f: f in n or n in f)]
         if not hits.empty:
             return str(hits.iloc[0]["recommended_action"])
-        # 2) keyword overlap
         toks = set(t for t in n.replace("(", " ").replace(")", " ").split() if len(t) > 3)
         rem["_overlap"] = rem["finding_type_lc"].apply(
             lambda f: len(set(f.split()) & toks)
@@ -46,14 +39,6 @@ def attach_remediation_hints(enriched: pd.DataFrame, remediation: pd.DataFrame) 
 
 
 def run_pipeline(data_dir: str = "data", top_k: int = 5) -> dict:
-    """Returns:
-    {
-      'top_risks': [ {rank, score, row(dict), explanation, nist_control, nist_summary, factors}, ... ],
-      'stats': {...},
-      'kev_status': str,
-      'nist_status': str,
-    }
-    """
     pack = load_data_pack(data_dir)
 
     kev_df, kev_status = fetch_kev()
