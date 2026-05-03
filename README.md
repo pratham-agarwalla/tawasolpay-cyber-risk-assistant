@@ -1,3 +1,15 @@
+---
+title: TawasolPay AI Cyber Risk Assistant
+emoji: 🛡️
+colorFrom: indigo
+colorTo: red
+sdk: streamlit
+sdk_version: 1.39.0
+app_file: app.py
+pinned: false
+license: mit
+---
+
 # TawasolPay — AI-Powered Cyber Risk Assistant
 
 **Live demo:** https://huggingface.co/spaces/ps2285/tawasolpay-cyber-risk-assistant
